@@ -40,7 +40,12 @@ void serial_dump() {
         printf_("\t\"period\":\"%ld\"\n", sample->period);
         printf_("}\n");
 
-        enqueue_avail(&profiler_ring, buffer, size, cookie);
+        int ret = enqueue_avail(&profiler_ring, buffer, size, &cookie);
+
+        if (ret != 0) {
+            sel4cp_dbg_puts(sel4cp_name);
+            sel4cp_dbg_puts("Failed to enqueue into the profiler available ring\n");
+        }
     }
 }
 
