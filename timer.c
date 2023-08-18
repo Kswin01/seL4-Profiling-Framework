@@ -1,7 +1,15 @@
-/* BASIC TIMER INTERFACE TO GET CURRENT SYSTEM TIME*/
+/*
+ * Copyright 2022, UNSW
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
 
-#include <stdint.h>
+/*
+ * This is a basic single client timer driver intended purely for
+ * use by the lwIP stack for TCP.
+ */
+
 #include "timer.h"
+#include "echo.h"
 
 uintptr_t gpt_regs;
 
@@ -20,9 +28,10 @@ static uint32_t overflow_count;
 #define ICR2 8
 #define CNT 9
 
+#define LWIP_TICK_MS 10
 #define NS_IN_MS 1000000ULL
 
-int timers_intialised = 0;
+int timers_initialised = 0;
 
 static uint64_t get_ticks(void) {
     /* FIXME: If an overflow interrupt happens in the middle here we are in trouble */
@@ -38,32 +47,56 @@ static uint64_t get_ticks(void) {
     return (overflow << 32) | cnt;
 }
 
-void gpt_init(void) {
-    gpt = (volatile uint32_t *) gpt_regs;
-    uint32_t cr = (
-        (1 << 9) | // Free run mode
-        (1 << 6) | // Peripheral clocks
-        (1)
-    );
-
-    gpt[CR] = cr;
-
-    timers_intialised = 1;
-}
-
-uint64_t sys_now(void) {
-    if (!timers_intialised) {
+u32_t sys_now(void)
+{
+    if (!timers_initialised) {
+        /* lwip_init() will call this when initialising its own timers,
+         * but the timer is not set up at this point so just return 0 */
         return 0;
     } else {
-        return get_ticks();
+        uint64_t time_now = get_ticks();
+        return time_now / NS_IN_MS;
     }
 }
 
-void timer_irq(sel4cp_channel ch) {
+void irq(sel4cp_channel ch)
+{
     uint32_t sr = gpt[SR];
     gpt[SR] = sr;
 
     if (sr & (1 << 5)) {
         overflow_count++;
     }
+
+    if (sr & 1) {
+        gpt[IR] &= ~1;
+        uint64_t abs_timeout = get_ticks() + (LWIP_TICK_MS * NS_IN_MS);
+        gpt[OCR1] = abs_timeout;
+        gpt[IR] |= 1;
+        sys_check_timeouts();
+    }
+}
+
+void gpt_init(void)
+{
+    gpt = (volatile uint32_t *) gpt_regs;
+
+        uint32_t cr = (
+        (1 << 9) | // Free run mode
+        (1 << 6) | // Peripheral clocks
+        (1) // Enable
+    );
+
+    gpt[CR] = cr;
+
+    gpt[IR] = (
+        (1 << 5) // rollover interrupt
+    );
+
+    // set a timer!
+    uint64_t abs_timeout = get_ticks() + (LWIP_TICK_MS * NS_IN_MS);
+    gpt[OCR1] = abs_timeout;
+    gpt[IR] |= 1;
+
+    timers_initialised = 1;
 }
