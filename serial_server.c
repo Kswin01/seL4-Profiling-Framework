@@ -58,7 +58,7 @@ void putchar_(char character)
 
     if(ret != 0) {
         sel4cp_dbg_puts(sel4cp_name);
-        sel4cp_dbg_puts(": serial server printf, unable to enqueue to tx used ring\n");
+        sel4cp_dbg_puts(": serial server putchar, unable to enqueue to tx used ring\n");
         return -1;
     }
 

@@ -75,14 +75,15 @@ void add_snapshot(sel4cp_id id,uint32_t time, uint64_t pc) {
 
     // Check if the buffers are full (for testing dumping when we have 10 buffers)
     // Notify the client that we need to dump
-    if (ring_size(profiler_ring.used_ring) == NUM_BUFFERS - 2) {
+    if (ring_size(profiler_ring.used_ring) == NUM_BUFFERS - 1) {
         sel4cp_notify(CLIENT_CH);
     }
 }
 
 
 
-/* Check if the PMU has overflowed */
+/* Check if the PMU has overflowed. The following functions are currently 
+only used for debugging purposes. */
 static inline int pmu_has_overflowed(uint32_t pmovsr)
 {
 	return pmovsr & ARMV8_OVSR_MASK;
@@ -397,18 +398,13 @@ void notified(sel4cp_channel ch) {
 
 void fault(sel4cp_id id, sel4cp_msginfo msginfo) {
     size_t label = sel4cp_msginfo_get_label(msginfo);
-
     if (label == seL4_Fault_PMUEvent) {
-        // Need to figure out how to get the whole 64 bit PC??
         uint64_t pc = sel4cp_mr_get(0);
         uint32_t ccnt_lower = sel4cp_mr_get(1);
         uint32_t ccnt_upper = sel4cp_mr_get(2);
         uint32_t pmovsr = sel4cp_mr_get(3);
         uint64_t time = ((uint64_t) ccnt_upper << 32) | ccnt_lower;
-        // Halt the PMU -- MOVE THIS TO THE KERNEL
-        // halt_cnt();
-
-
+  
         // Only add a snapshot if the counter we are sampling on is in the interrupt flag
         // @kwinter Change this to deal with new counter definitions
         if (pmovsr & (IRQ_CYCLE_COUNTER << 31) ||
@@ -421,17 +417,6 @@ void fault(sel4cp_id id, sel4cp_msginfo msginfo) {
             add_snapshot(id, time, pc);
         }
 
-        // Check if an overflow has occured
-        // if(pmu_has_overflowed(pmovsr)) {
-        //     //printf_("PMU has overflowed\n");
-        // } else {
-        //     //printf_("PMU hasn't overflowed\n");
-        // }
-        
-        // Reset any counters that overflowed.
-
-        // @kwinter Need a way to count how many times a certain counter has overflowed, if we 
-        // are not sampling on it. Add this to the raw data section of the perf sample.
         reset_cnt(pmovsr);
 
         // Resume counters
