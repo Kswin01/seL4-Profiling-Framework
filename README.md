@@ -2,6 +2,8 @@
 
 This repository demonstrates profiling a simple Ethernet system for the imx8mm_evk board. 
 
+The profiler exists mainly as a user-level component, aimed to be easily integratable into existing systems. It requires some minimal kernel changes.
+
 # Dependencies
 
 You will need to build the microkit (formerly known as the seL4CP) sdk. 
@@ -23,3 +25,9 @@ Now that we have built the SDK, we can build the profiler system. Run the follow
 ```
 make BUILD_DIR=<path_to_build_dir> SEL4CP_BOARD=imx8mm_evk SEL4CP_SDK=<path_to_sel4cp_sdk> SEL4CP_CONFIG=benchmark
 ```
+
+# Issues
+
+Currently, when specifying a period in one of the PD's that are being profiled, we run into the same error as documented here: https://github.com/seL4/seL4/issues/1104/.
+
+When we do not specify a period, we are able to properly profile the system.
