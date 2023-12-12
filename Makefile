@@ -38,7 +38,9 @@ NETWORK_COMPONENTS=network/components
 
 RINGBUFFERDIR=libserialsharedringbuffer
 XMODEMDIR=xmodem
-UARTDIR=uart
+UART_DRIVER=uart/drivers/meson
+UART_COMPONENTS=uart/components
+UART_DIR=uart
 
 BOARD_DIR := $(SEL4CP_SDK)/board/$(SEL4CP_BOARD)/$(SEL4CP_CONFIG)
 
@@ -55,10 +57,11 @@ CFLAGS += -I$(BOARD_DIR)/include \
 	-I$(RINGBUFFERDIR)/include \
 	-I$(BOARD_DIR)/include/sys \
 	-I$(XMODEMDIR)/include \
-	-I$(UARTDIR)/include \
+	-I$(UART_DRIVER)/include \
 	-I$(LWIP)/include \
 	-I$(LWIP)/include/ipv4 \
 	-I$(RING_BUFFER)/include \
+	-I$(UART_DIR)/include \
 	-MD \
 	-MP
 
@@ -100,7 +103,7 @@ NETIFFILES=$(LWIP)/netif/ethernet.c
 LWIPFILES=$(NETWORK_COMPONENTS)/lwip.c $(NETWORK_COMPONENTS)/lwip_timer.c cache.c $(COREFILES) $(CORE4FILES) $(NETIFFILES)
 LWIP_OBJS := $(LWIPFILES:.c=.o) $(NETWORK_COMPONENTS)/lwip.o $(ETH_RING_BUFFER)/shared_ringbuffer.o $(NETWORK_COMPONENTS)/utilization_socket.o
 
-UART_OBJS := uart/uart.o libserialsharedringbuffer/shared_ringbuffer.o
+UART_OBJS := uart/drivers/meson/uart.o libserialsharedringbuffer/shared_ringbuffer.o
 UART_MUX_TX_OBJS := uart/mux_tx.o libserialsharedringbuffer/shared_ringbuffer.o
 UART_MUX_RX_OBJS := uart/mux_rx.o libserialsharedringbuffer/shared_ringbuffer.o
 PROFILER_OBJS := profiler.o libserialsharedringbuffer/shared_ringbuffer.o
@@ -138,7 +141,7 @@ $(BUILD_DIR)/%.o: %.s Makefile
 $(BUILD_DIR)/profiler.elf: $(addprefix $(BUILD_DIR)/, $(PROFILER_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-$(BUILD_DIR)/uart.elf: $(addprefix $(BUILD_DIR)/, $(UART_OBJS))
+$(BUILD_DIR)/uart.elf: $(addprefix $(BUILD_DIR)/, $(UART_DRIVER))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(BUILD_DIR)/uart_mux_rx.elf: $(addprefix $(BUILD_DIR)/, $(UART_MUX_RX_OBJS))
