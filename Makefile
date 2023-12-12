@@ -8,16 +8,16 @@ ifeq ($(strip $(BUILD_DIR)),)
 $(error BUILD_DIR must be specified)
 endif
 
-ifeq ($(strip $(SEL4CP_SDK)),)
-$(error SEL4CP_SDK must be specified)
+ifeq ($(strip $(MICROKIT_SDK)),)
+$(error MICROKIT_SDK must be specified)
 endif
 
-ifeq ($(strip $(SEL4CP_BOARD)),)
-$(error SEL4CP_BOARD must be specified)
+ifeq ($(strip $(MICROKIT_BOARD)),)
+$(error MICROKIT_BOARD must be specified)
 endif
 
-ifeq ($(strip $(SEL4CP_CONFIG)),)
-$(error SEL4CP_CONFIG must be specified)
+ifeq ($(strip $(MICROKIT_CONFIG)),)
+$(error MICROKIT_CONFIG must be specified)
 endif
 
 TOOLCHAIN := aarch64-none-elf
@@ -27,10 +27,9 @@ CPU := cortex-a55
 CC := $(TOOLCHAIN)-gcc
 LD := $(TOOLCHAIN)-ld
 AS := $(TOOLCHAIN)-as
-SEL4CP_TOOL ?= $(SEL4CP_SDK)/bin/sel4cp
+MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 
 LWIP=network/ipstacks/lwip/src
-UTIL=include/
 ETH_RING_BUFFER=network/libethsharedringbuffer
 ETHERNET_DRIVER=network/imx
 TIMER_DRIVER=clock/imx
@@ -38,16 +37,16 @@ NETWORK_COMPONENTS=network/components
 
 RINGBUFFERDIR=libserialsharedringbuffer
 XMODEMDIR=xmodem
-UART_DRIVER=uart/drivers/meson
+UART_DRIVER=uart/drivers/imx
 UART_COMPONENTS=uart/components
 UART_DIR=uart
 
-BOARD_DIR := $(SEL4CP_SDK)/board/$(SEL4CP_BOARD)/$(SEL4CP_CONFIG)
+BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 
 IMAGES := profiler.elf client.elf uart.elf uart_mux_rx.elf uart_mux_tx.elf dummy_prog.elf dummy_prog2.elf eth.elf eth_mux_rx.elf eth_mux_tx.elf eth_copy.elf arp.elf timer.elf
 CFLAGS := -mcpu=$(CPU) -mstrict-align -ffreestanding -g3 -O3 -Wall  -Wno-unused-function -fno-omit-frame-pointer
 LDFLAGS := -L$(BOARD_DIR)/lib -Llib
-LIBS := -lsel4cp -Tsel4cp.ld -lc
+LIBS := -lmicrokit -Tmicrokit.ld -lc
 
 IMAGE_FILE = $(BUILD_DIR)/loader.img
 REPORT_FILE = $(BUILD_DIR)/report.txt
@@ -61,7 +60,6 @@ CFLAGS += -I$(BOARD_DIR)/include \
 	-I$(LWIP)/include \
 	-I$(LWIP)/include/ipv4 \
 	-I$(RING_BUFFER)/include \
-	-I$(UART_DIR)/include \
 	-MD \
 	-MP
 
@@ -103,9 +101,9 @@ NETIFFILES=$(LWIP)/netif/ethernet.c
 LWIPFILES=$(NETWORK_COMPONENTS)/lwip.c $(NETWORK_COMPONENTS)/lwip_timer.c cache.c $(COREFILES) $(CORE4FILES) $(NETIFFILES)
 LWIP_OBJS := $(LWIPFILES:.c=.o) $(NETWORK_COMPONENTS)/lwip.o $(ETH_RING_BUFFER)/shared_ringbuffer.o $(NETWORK_COMPONENTS)/utilization_socket.o
 
-UART_OBJS := uart/drivers/meson/uart.o libserialsharedringbuffer/shared_ringbuffer.o
-UART_MUX_TX_OBJS := uart/mux_tx.o libserialsharedringbuffer/shared_ringbuffer.o
-UART_MUX_RX_OBJS := uart/mux_rx.o libserialsharedringbuffer/shared_ringbuffer.o
+UART_OBJS := $(UART_DRIVER)/uart.o libserialsharedringbuffer/shared_ringbuffer.o
+UART_MUX_TX_OBJS := $(UART_COMPONENTS)/mux_tx.o libserialsharedringbuffer/shared_ringbuffer.o
+UART_MUX_RX_OBJS := $(UART_COMPONENTS)/mux_rx.o libserialsharedringbuffer/shared_ringbuffer.o
 PROFILER_OBJS := profiler.o libserialsharedringbuffer/shared_ringbuffer.o
 CLIENT_OBJS := client.o serial_server.o printf.o libserialsharedringbuffer/shared_ringbuffer.o xmodem/crc16.o xmodem/xmodem.o $(LWIPFILES:.c=.o) $(NETWORK_COMPONENTS)/lwip.o $(NETWORK_COMPONENTS)/utilization_socket.o
 DUMMY_PROG_OBJS := dummy_prog.o
@@ -141,7 +139,7 @@ $(BUILD_DIR)/%.o: %.s Makefile
 $(BUILD_DIR)/profiler.elf: $(addprefix $(BUILD_DIR)/, $(PROFILER_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-$(BUILD_DIR)/uart.elf: $(addprefix $(BUILD_DIR)/, $(UART_DRIVER))
+$(BUILD_DIR)/uart.elf: $(addprefix $(BUILD_DIR)/, $(UART_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(BUILD_DIR)/uart_mux_rx.elf: $(addprefix $(BUILD_DIR)/, $(UART_MUX_RX_OBJS))
@@ -181,7 +179,7 @@ $(BUILD_DIR)/timer.elf: $(addprefix $(BUILD_DIR)/, $(TIMER_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) profiler.system
-	$(SEL4CP_TOOL) profiler.system --search-path $(BUILD_DIR) --board $(SEL4CP_BOARD) --config $(SEL4CP_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+	$(MICROKIT_TOOL) profiler.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 .PHONY: all depend compile clean
 
@@ -192,8 +190,6 @@ $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) profiler.sys
 directories:
 	$(info $(shell mkdir -p $(BUILD_DIR)/libserialsharedringbuffer))	\
 	$(info $(shell mkdir -p $(BUILD_DIR)/xmodem))	\
-	$(info $(shell mkdir -p $(BUILD_DIR)/uart))	\
-	$(info $(shell mkdir -p $(BUILD_DIR)/uart))	\
 
 clean:
 	rm -f *.o *.elf .depend*
