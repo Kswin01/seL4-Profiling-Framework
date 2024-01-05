@@ -8,9 +8,9 @@
 #include "printf.h"
 #include "profiler.h"
 #include "xmodem.h"
-#include "shared_ringbuffer.h"
+#include <sddf/serial/shared_ringbuffer.h>
 #include "serial_server.h"
-#include "socket.h"
+#include <sddf/network/socket.h>
 #include <string.h>
 #include "lwip/ip.h"
 #include "lwip/pbuf.h"
@@ -194,19 +194,22 @@ void eth_dump_start() {
 }
 
 void init() {
-    // Init serial here 
-    // Currently handled by profiler, but eventually remove everything from there
-    if (CLIENT_CONFIG == 0 || CLIENT_CONFIG == 1) {
-        init_serial();
-    } else if (CLIENT_CONFIG == 2) {
-        init_lwip();
-    }
-
     // Set client state to idle
     client_state = CLIENT_IDLE;
 
     // Init ring handle between profiler
     ring_init(&profiler_ring, (ring_buffer_t *) profiler_ring_free, (ring_buffer_t *) profiler_ring_used, 0, 512, 512);
+
+    if (CLIENT_CONFIG == 0 || CLIENT_CONFIG == 1) {
+        init_serial();
+    } else if (CLIENT_CONFIG == 2) {
+        // Try and wait a bit before initialising - REMOVE THIS IN FUTURE
+        for (int i = 0; i < 99999999; i++) {
+            asm("nop");
+        }
+        init_lwip();
+    }
+
 }
 
 void notified(microkit_channel ch) {

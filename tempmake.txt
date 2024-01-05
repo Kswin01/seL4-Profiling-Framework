@@ -22,24 +22,23 @@ endif
 
 TOOLCHAIN := aarch64-none-elf
 
-CPU := cortex-a53
+CPU := cortex-a55
 
 CC := $(TOOLCHAIN)-gcc
 LD := $(TOOLCHAIN)-ld
 AS := $(TOOLCHAIN)-as
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 
-SDDF=sddf
-LWIP=$(SDDF)/network/ipstacks/lwip/src
-NETWORK_RING_BUFFER=$(SDDF)/network/libethsharedringbuffer
-ETHERNET_DRIVER=$(SDDF)/drivers/network/meson
-TIMER_DRIVER=$(SDDF)/drivers/clock/meson
-NETWORK_COMPONENTS=$(SDDF)/network/components
+LWIP=network/ipstacks/lwip/src
+UTIL=include/
+ETH_RING_BUFFER=network/libethsharedringbuffer
+ETHERNET_DRIVER=network/imx
+TIMER_DRIVER=clock/imx
+NETWORK_COMPONENTS=network/components
 
-SERIAL_RING_BUFFER=$(SDDF)/serial/libserialsharedringbuffer
+RINGBUFFERDIR=libserialsharedringbuffer
 XMODEMDIR=xmodem
-UART_DRIVER=$(SDDF)/drivers/serial/meson
-UART_COMPONENTS=$(SDDF)/serial/components
+UARTDIR=uart
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 
@@ -53,16 +52,13 @@ REPORT_FILE = $(BUILD_DIR)/report.txt
 
 CFLAGS += -I$(BOARD_DIR)/include \
 	-Iinclude	\
-	-I$(SDDF)/include \
-	-I$(SDDF)/util/include \
-	-I$(SDDF)/util/include/arch \
-	-I$(SDDF)/benchmark/include \
+	-I$(RINGBUFFERDIR)/include \
 	-I$(BOARD_DIR)/include/sys \
 	-I$(XMODEMDIR)/include \
-	-I$(UART_DRIVER)/include \
+	-I$(UARTDIR)/include \
 	-I$(LWIP)/include \
 	-I$(LWIP)/include/ipv4 \
-	-DSERIAL_NUM_CLIENTS=1 \
+	-I$(RING_BUFFER)/include \
 	-MD \
 	-MP
 
@@ -102,26 +98,27 @@ NETIFFILES=$(LWIP)/netif/ethernet.c
 
 # LWIPFILES: All the above.
 LWIPFILES=$(NETWORK_COMPONENTS)/lwip.c $(NETWORK_COMPONENTS)/lwip_timer.c cache.c $(COREFILES) $(CORE4FILES) $(NETIFFILES)
+LWIP_OBJS := $(LWIPFILES:.c=.o) $(NETWORK_COMPONENTS)/lwip.o $(ETH_RING_BUFFER)/shared_ringbuffer.o $(NETWORK_COMPONENTS)/utilization_socket.o
 
-UART_OBJS := $(UART_DRIVER)/uart.o sddf_serial_sharedringbuffer.o
-UART_MUX_TX_OBJS := $(UART_COMPONENTS)/mux_tx.o sddf_serial_sharedringbuffer.o
-UART_MUX_RX_OBJS := $(UART_COMPONENTS)/mux_rx.o sddf_serial_sharedringbuffer.o
-PROFILER_OBJS := profiler.o sddf_serial_sharedringbuffer.o
-CLIENT_OBJS := client.o serial_server.o printf.o sddf_network_sharedringbuffer.o xmodem/crc16.o xmodem/xmodem.o $(LWIPFILES:.c=.o) $(NETWORK_COMPONENTS)/lwip.o $(NETWORK_COMPONENTS)/utilization_socket.o sddf_timer_client.o
+UART_OBJS := uart/uart.o libserialsharedringbuffer/shared_ringbuffer.o
+UART_MUX_TX_OBJS := uart/mux_tx.o libserialsharedringbuffer/shared_ringbuffer.o
+UART_MUX_RX_OBJS := uart/mux_rx.o libserialsharedringbuffer/shared_ringbuffer.o
+PROFILER_OBJS := profiler.o libserialsharedringbuffer/shared_ringbuffer.o
+CLIENT_OBJS := client.o serial_server.o printf.o libserialsharedringbuffer/shared_ringbuffer.o xmodem/crc16.o xmodem/xmodem.o $(LWIPFILES:.c=.o) $(NETWORK_COMPONENTS)/lwip.o $(NETWORK_COMPONENTS)/utilization_socket.o
 DUMMY_PROG_OBJS := dummy_prog.o
 DUMMY_PROG2_OBJS := dummy_prog2.o
 
 
-ETH_OBJS := $(ETHERNET_DRIVER)/ethernet.o sddf_network_sharedringbuffer.o
-ETH_MUX_RX_OBJS := $(NETWORK_COMPONENTS)/mux_rx.o sddf_network_sharedringbuffer.o
-ETH_MUX_TX_OBJS := $(NETWORK_COMPONENTS)/mux_tx.o sddf_network_sharedringbuffer.o
-ETH_COPY_OBJS := $(NETWORK_COMPONENTS)/copy.o sddf_network_sharedringbuffer.o
-ARP_OBJS := cache.o $(LWIP)/core/inet_chksum.o $(LWIP)/core/def.o $(NETWORK_COMPONENTS)/arp.o sddf_network_sharedringbuffer.o
+ETH_OBJS := $(ETHERNET_DRIVER)/ethernet.o $(ETH_RING_BUFFER)/shared_ringbuffer.o
+ETH_MUX_RX_OBJS := $(NETWORK_COMPONENTS)/mux_rx.o $(ETH_RING_BUFFER)/shared_ringbuffer.o
+ETH_MUX_TX_OBJS := $(NETWORK_COMPONENTS)/mux_tx_bandwidth_limited.o $(ETH_RING_BUFFER)/shared_ringbuffer.o
+ETH_COPY_OBJS := $(NETWORK_COMPONENTS)/copy.o $(ETH_RING_BUFFER)/shared_ringbuffer.o
+ARP_OBJS := cache.o $(LWIP)/core/inet_chksum.o $(LWIP)/core/def.o $(NETWORK_COMPONENTS)/arp.o $(ETH_RING_BUFFER)/shared_ringbuffer.o
 TIMER_OBJS := $(TIMER_DRIVER)/timer.o
 
 OBJS := $(sort $(addprefix $(BUILD_DIR)/, $(ETH_OBJS) $(ETH_MUX_RX_OBJS) $(ETH_MUX_TX_OBJS)\
 	$(ETH_COPY_OBJS) \
-	$(ARP_OBJS) $(TIMER_OBJS)))
+	$(LWIP_OBJS) $(ARP_OBJS) $(TIMER_OBJS)))
 DEPS := $(OBJS:.o=.d)
 
 
@@ -137,15 +134,6 @@ $(BUILD_DIR)/%.o: %.c Makefile
 
 $(BUILD_DIR)/%.o: %.s Makefile
 	$(AS) -g3 -mcpu=$(CPU) $< -o $@
-
-$(BUILD_DIR)/sddf_network_sharedringbuffer.o:
-	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include make -C $(NETWORK_RING_BUFFER)
-
-$(BUILD_DIR)/sddf_serial_sharedringbuffer.o:
-	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include make -C $(SERIAL_RING_BUFFER)
-
-$(BUILD_DIR)/sddf_timer_client.o:
-	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include TIMER_CHANNEL=9 make -C $(SDDF)/timer/client
 
 $(BUILD_DIR)/profiler.elf: $(addprefix $(BUILD_DIR)/, $(PROFILER_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
@@ -171,6 +159,9 @@ $(BUILD_DIR)/client.elf: $(addprefix $(BUILD_DIR)/, $(CLIENT_OBJS))
 $(BUILD_DIR)/eth.elf: $(addprefix $(BUILD_DIR)/, $(ETH_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
+# $(BUILD_DIR)/lwip.elf: $(addprefix $(BUILD_DIR)/, $(LWIP_OBJS))
+# 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
 $(BUILD_DIR)/eth_mux_rx.elf: $(addprefix $(BUILD_DIR)/, $(ETH_MUX_RX_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
@@ -186,8 +177,8 @@ $(BUILD_DIR)/arp.elf: $(addprefix $(BUILD_DIR)/, $(ARP_OBJS))
 $(BUILD_DIR)/timer.elf: $(addprefix $(BUILD_DIR)/, $(TIMER_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-$(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) profiler_oc4.system
-	$(MICROKIT_TOOL) profiler_oc4.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+$(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) profiler.system
+	$(MICROKIT_TOOL) profiler.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 .PHONY: all depend compile clean
 
@@ -198,6 +189,8 @@ $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) profiler_oc4
 directories:
 	$(info $(shell mkdir -p $(BUILD_DIR)/libserialsharedringbuffer))	\
 	$(info $(shell mkdir -p $(BUILD_DIR)/xmodem))	\
+	$(info $(shell mkdir -p $(BUILD_DIR)/uart))	\
+	$(info $(shell mkdir -p $(BUILD_DIR)/uart))	\
 
 clean:
 	rm -f *.o *.elf .depend*

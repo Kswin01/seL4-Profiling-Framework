@@ -1,0 +1,3 @@
+[submodule "sddf"]
+	path = sddf
+	url = https://github.com/au-ts/sddf.git

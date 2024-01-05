@@ -13,7 +13,7 @@
 #define NUM_BUFFERS 512
 #define BUF_SIZE 2048
 
-int setup_utilization_socket(void);
+int setup_profiler_socket(void);
 
 void init_lwip(void);
 void notified_lwip(microkit_channel ch);

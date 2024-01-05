@@ -7,9 +7,9 @@
 
 #define UART_REG(x) ((volatile uint32_t *)(UART_BASE + (x)))
 #define UART_BASE 0x5000000 //0x30890000 in hardware on imx8mm. 
-#define STAT 0x98
-#define TRANSMIT 0x40
-#define STAT_TDRE (1 << 14)
+#define UART_WFIFO 0x0
+#define UART_STATUS 0xC
+#define UART_TX_FULL (1 << 21)
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 
@@ -24,8 +24,8 @@
 static void
 putC(uint8_t ch)
 {
-    while (!(*UART_REG(STAT) & STAT_TDRE)) { }
-    *UART_REG(TRANSMIT) = ch;
+    while ((*UART_REG(UART_STATUS) & UART_TX_FULL));
+    *UART_REG(UART_WFIFO) = ch;
 }
 
 static void

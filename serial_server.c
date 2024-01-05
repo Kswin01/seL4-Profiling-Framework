@@ -1,6 +1,6 @@
+#include <microkit.h>
 #include "serial_server.h"
-#include "uart.h"
-#include "shared_ringbuffer.h"
+#include <sddf/serial/shared_ringbuffer.h>
 #include "util.h"
 #include <string.h>
 #include <stdlib.h>
